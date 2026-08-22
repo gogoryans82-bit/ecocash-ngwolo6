@@ -28,10 +28,11 @@ body {
   background: var(--page-bg);
   color: var(--text-dark);
   min-height: 100vh;
-}.logo-white .eco,
-.logo-white .cash {
-  color: #fff !important;
 }
+
+/* ============================================================
+   LOGO (blue "Eco", red "Cash" – brand colors)
+   ============================================================ */
 .eco-logo-text {
   font-family: 'Inter', sans-serif;
   font-weight: 700;
@@ -42,27 +43,6 @@ body {
   margin: 0;
 }
 
-/* ============================================================
-   LOGO  (Updated with blue/red text)
-   ============================================================ */
-.eco-logo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  line-height: 1.2;
-  user-select: none;
-}
-
-.eco-logo-text {
-  font-family: 'Inter', sans-serif;
-  font-weight: 700;
-  font-size: 2rem;
-  letter-spacing: -0.5px;
-  display: inline-flex;
-  align-items: center;
-}
-
 .eco-logo-text .eco {
   color: #1e63c6;
 }
@@ -71,22 +51,9 @@ body {
   color: #e60000;
 }
 
-.eco-logo-sub {
-  font-family: 'Inter', sans-serif;
-  font-size: 0.75rem;
-  color: #666;
-  font-weight: 400;
-  margin-top: 2px;
-  letter-spacing: 0.3px;
-}
-
-/* Smaller version for navbar */
-.eco-logo.small .eco-logo-text {
+/* For navbar, smaller version */
+.navbar .eco-logo-text {
   font-size: 1.2rem;
-}
-
-.eco-logo.small .eco-logo-sub {
-  font-size: 0.55rem;
 }
 
 /* ============================================================
@@ -109,10 +76,10 @@ body {
 }
 
 /* ============================================================
-   NAVBAR
+   NAVBAR (light background for contrast with logo)
    ============================================================ */
 .navbar {
-  background: var(--eco-blue);
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -120,12 +87,13 @@ body {
   height: 54px;
   position: relative;
   flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
 }
 
 .nav-left {
   position: absolute;
   left: 20px;
-  color: rgba(255,255,255,0.6);
+  color: #555;
   font-size: 0.84rem;
   cursor: pointer;
   text-decoration: none;
@@ -133,7 +101,7 @@ body {
 }
 
 .nav-left:hover {
-  color: #fff;
+  color: var(--eco-blue);
 }
 
 .nav-right {
@@ -149,8 +117,22 @@ body {
 .hline {
   width: 20px;
   height: 2px;
-  background: rgba(255,255,255,0.6);
+  background: #333;
   border-radius: 1px;
+}
+
+/* ============================================================
+   LANDING NAV (also light)
+   ============================================================ */
+.land-nav {
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 52px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
 }
 
 /* ============================================================
@@ -396,16 +378,6 @@ body {
   background: var(--page-bg);
 }
 
-.land-nav {
-  background: var(--eco-blue);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  height: 52px;
-  flex-shrink: 0;
-}
-
 .land-center {
   flex: 1;
   display: flex;
@@ -423,18 +395,18 @@ body {
   padding: 36px 32px;
 }
 
-.land-card h1 {
+.land-card h2 {
   font-size: 1.45rem;
   font-weight: 700;
   text-align: center;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
 }
 
-.land-tagline {
+.land-card p {
   text-align: center;
-  font-size: 0.84rem;
+  font-size: 0.9rem;
   color: var(--text-light);
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 .land-footer {
@@ -447,7 +419,7 @@ body {
 }
 
 /* ============================================================
-   CALCULATOR
+   CALCULATOR (used in step1)
    ============================================================ */
 .calc-box {
   background: #fafafa;
@@ -761,35 +733,39 @@ input[type=range]::-webkit-slider-thumb {
 }
 
 /* ============================================================
-   SMS PASTE
+   PIN ATTEMPTS DISPLAY
    ============================================================ */
-.momo-msg-box {
-  margin-bottom: 16px;
-}
-
-.momo-msg-box textarea {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1.5px solid var(--border);
+.pin-attempts {
+  text-align: center;
+  font-size: 0.85rem;
+  padding: 8px 12px;
   border-radius: var(--radius-sm);
-  font-family: 'Inter', sans-serif;
-  font-size: 0.9rem;
-  color: var(--text-dark);
-  background: #fff;
-  outline: none;
-  transition: border-color 0.2s;
-  min-height: 120px;
-  resize: vertical;
+  margin: 8px 0 12px;
+  font-weight: 500;
 }
 
-.momo-msg-box textarea:focus {
-  border-color: var(--eco-blue);
+.pin-attempts.warning {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
 }
 
-.momo-msg-box .hint {
-  font-size: 0.75rem;
-  color: var(--text-light);
-  margin-top: 5px;
+.pin-attempts.blocked {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #ef4444;
+  animation: pulse-blocked 1.5s ease infinite;
+}
+
+.pin-attempts.available {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #10b981;
+}
+
+@keyframes pulse-blocked {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 /* ============================================================
