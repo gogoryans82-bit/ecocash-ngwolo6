@@ -28,6 +28,18 @@ body {
   background: var(--page-bg);
   color: var(--text-dark);
   min-height: 100vh;
+}.logo-white .eco,
+.logo-white .cash {
+  color: #fff !important;
+}
+.eco-logo-text {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 2rem;
+  letter-spacing: -0.5px;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
 }
 
 /* ============================================================
